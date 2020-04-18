@@ -66,8 +66,10 @@ reich.fst <- function(gl, bootstrap=FALSE, verbose=TRUE) {
           for (i in 1:n.bs){
             loci <- sample((1:nloc), nloc, replace=TRUE)
           
-            pop1.bs <- as.matrix(pop1)[,loci]
-            pop2.bs <- as.matrix(pop2)[,loci]
+            pop1.bs <- matrix(as.matrix(pop1)[,loci],
+                              ncol=length(loci))
+            pop2.bs <- matrix(as.matrix(pop2)[,loci],
+                              ncol=length(loci))
           
             a1 <- colSums2(as.matrix(pop1.bs),na.rm=T)
             a2 <- colSums2(as.matrix(pop2.bs),na.rm=T)
