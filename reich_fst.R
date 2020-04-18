@@ -86,11 +86,13 @@ reich.fst <- function(gl, bootstrap=FALSE, verbose=TRUE) {
             bs[k,i+5] <- F.bs
           }
           if (verbose == TRUE){
-            print(paste("bootstrapping 95% CI: ",quantile(bs[k,6:(n.bs+5)],c(0.025),na.rm=T),"-",quantile(bs[k,3:n.bs+2],c(0.025),na.rm=T)))
+            print(paste("bootstrapping 95% CI: ",
+                        quantile(bs[k,6:(n.bs+5)],c(0.025),na.rm=T),"-",
+                        quantile(bs[k,6:(n.bs+5)],c(0.975),na.rm=T)))
           }
           
-          bs[k,4:5] <- c(quantile(bs[k,3:n.bs+2],c(0.025),na.rm=T),
-                         quantile(bs[k,3:n.bs+2],c(0.975),na.rm=T))
+          bs[k,4:5] <- c(quantile(bs[k,6:n.bs+5],c(0.025),na.rm=T),
+                         quantile(bs[k,6:n.bs+5],c(0.975),na.rm=T))
         }
         
       }
