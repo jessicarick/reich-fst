@@ -1,20 +1,18 @@
 ## reich fst estimator
-## code by J. Rick, March 2020 -- https://github.com/jessicarick/reich-fst/
-## input = genlight object
-## FST will be calculated between pops in genlight object, so make sure pops are set prior to calling reich.fst()
-## specify number of bootstraps using e.g. "bootstrap=100"
+## vectorized version
+## input=genlight object
+## FST will be calculated between pops in genlight object
+## specify number of bootstraps using "bootstrap=100"
 
-reich.fst <- function(gl, bootstrap=FALSE, verbose=TRUE) { 
+reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
     install.packages("matrixStats")
     library(matrixStats, character.only=T)
   }
-  if (!require("combinat",character.only=T, quietly=T)) {
-    install.packages("combinat")
+  if (!require("dplyr",character.only=T, quietly=T)) {
+    install.packages("dplyr")
+    library(dplyr, character.only=T)
   }
-  if (!require("beepr",character.only=T, quietly=T)) {
-    install.packages("beepr")
-  }  
   
   nloc <- gl@n.loc
   npop <- length(levels(gl@pop))
@@ -61,7 +59,7 @@ reich.fst <- function(gl, bootstrap=FALSE, verbose=TRUE) {
             print("beginning bootstrapping")
           }
           
-          bs[k,1:3] <- c(p2,p1,F)
+          bs[k,1:3] <- c(p2,p1,as.numeric(F))
           
           for (i in 1:n.bs){
             loci <- sample((1:nloc), nloc, replace=TRUE)
@@ -87,12 +85,12 @@ reich.fst <- function(gl, bootstrap=FALSE, verbose=TRUE) {
           }
           if (verbose == TRUE){
             print(paste("bootstrapping 95% CI: ",
-                        quantile(bs[k,6:(n.bs+5)],c(0.025),na.rm=T),"-",
-                        quantile(bs[k,6:(n.bs+5)],c(0.975),na.rm=T)))
+                        quantile(bs[k,6:(n.bs+5)],0.025,na.rm=T),"-",
+                        quantile(bs[k,6:(n.bs+5)],0.975,na.rm=T)))
           }
           
-          bs[k,4:5] <- c(quantile(bs[k,6:n.bs+5],c(0.025),na.rm=T),
-                         quantile(bs[k,6:n.bs+5],c(0.975),na.rm=T))
+          bs[k,4:5] <- c(quantile(bs[k,6:(n.bs+5)],0.025,na.rm=T),
+                         quantile(bs[k,6:(n.bs+5)],0.975,na.rm=T))
         }
         
       }
@@ -100,14 +98,64 @@ reich.fst <- function(gl, bootstrap=FALSE, verbose=TRUE) {
   }
   
   fsts[fsts < 0] <- 0
-  colnames(bs)[1:5] <- c("pop1","pop2","fst_estimate","95_min_CI","95_max_CI")
   
   if (bootstrap != FALSE){
+    colnames(bs)[1:5] <- c("pop1","pop2","fst_estimate","min_CI","max_CI")
     fst.list <- list(fsts,bs)
     names(fst.list) <- c("fsts","bootstraps")
+    
+    if (plot == TRUE){
+      print("drawing plot with bootstraps")
+      
+      if (!require("ggplot2",character.only=T, quietly=T)) {
+        install.packages("ggplot2")
+        library(ggplot2, character.only=T)
+      }
+      
+      plot.data <- bs[,1:5]
+      plot.data$fst_estimate <- as.numeric(plot.data$fst_estimate)
+      plot.data$min_CI <- as.numeric(plot.data$min_CI)
+      plot.data$max_CI <- as.numeric(plot.data$max_CI)
+      plot.data$pop_pair <- paste(plot.data$pop1,plot.data$pop2,sep="_")
+      plot.data$signif <- case_when(plot.data$min_CI > 0 ~ TRUE,
+                                    TRUE ~ FALSE)
+
+      
+      bs.plot <- ggplot(plot.data, aes(x=pop_pair,y=fst_estimate,col=signif)) + 
+        geom_point(size=2) + 
+        coord_flip() + 
+        geom_errorbar(aes(ymin=min_CI,ymax=max_CI),width=0.1,size=1) + 
+        geom_hline(yintercept=0, lty=2, lwd=1, col="gray50") + 
+        theme_minimal() + 
+        theme(legend.position="none")
+      
+      print(bs.plot)
+    }
   } else {
     fst.list <- list(fsts)
     names(fst.list) <- "fsts"
+    
+    if (plot == TRUE){
+      print("drawing plot without bootstraps")
+      
+      if (!require("ggplot2",character.only=T, quietly=T)) {
+        install.packages("ggplot2")
+        library(ggplot2, character.only=T)
+      }
+      
+      plot.data <- data.frame(combinat::combn2(row.names(fsts)),
+                              fst_estimate=fsts[lower.tri(fsts)])
+      plot.data$pop_pair <- paste(plot.data$X1,plot.data$X2,sep="_")
+
+      fst.plot <- ggplot(plot.data, aes(x=pop_pair,y=fst_estimate)) + 
+        geom_point(size=2) + 
+        coord_flip() + 
+        geom_hline(yintercept=0, lty=2, lwd=1, col="gray50") + 
+        theme_minimal() + 
+        theme(legend.position="none")
+      
+      print(fst.plot)
+    }
   }
   
   return(fst.list)
