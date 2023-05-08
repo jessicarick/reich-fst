@@ -3,7 +3,6 @@
 ## input=genlight object
 ## FST will be calculated between pops in genlight object
 ## specify number of bootstraps using "bootstrap=100"
-require(dartR)
 
 reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
@@ -13,6 +12,13 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
   if (!require("dplyr",character.only=T, quietly=T)) {
     install.packages("dplyr")
     library(dplyr, character.only=T)
+  }
+  if (!require("dartR",character.only=T, quietly=T)) {
+    install.packages("dartR")
+    library(dartR, character.only=T)
+  }
+  if (!require("combinat",character.only=T, quietly=T)) {
+    install.packages("combinat")
   }
   
   nloc <- gl@n.loc
