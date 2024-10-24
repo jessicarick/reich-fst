@@ -131,7 +131,7 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
       bs.plot <- ggplot(plot.data, aes(x=pop_pair,y=fst_estimate,col=signif)) + 
         geom_point(size=2) + 
         coord_flip() + 
-        geom_errorbar(aes(ymin=min_CI,ymax=max_CI),width=0.1,size=1) + 
+        geom_errorbar(aes(ymin=min_CI,ymax=max_CI),width=0.1,linewidth=1) + 
         geom_hline(yintercept=0, lty=2, lwd=1, col="gray50") + 
         theme_minimal() + 
         theme(legend.position="none")
