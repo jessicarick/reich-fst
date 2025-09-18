@@ -225,6 +225,30 @@ loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) {
   
   # make negative values 0
   fsts$fst[fsts$fst < 0] <- 0
-  
+
+  if (plot == TRUE){
+    print("drawing plot of locus-specific FST estimates")
+    
+    if (!require("ggplot2",character.only=T, quietly=T)) {
+      install.packages("ggplot2")
+      library(ggplot2, character.only=T)
+    }
+    
+    fst.plot <- ggplot(fsts, aes(x=loc,y=fst)) + 
+      geom_point(size=1, alpha=0.6) +
+      geom_hline(yintercept=mean(test_loc$fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
+      theme_bw() +
+      xlab("Locus") +
+      ylab("Reich-Patterson FST Estimate") +
+      theme(legend.position="none",
+            axis.text.x=element_blank(),
+            plot.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            axis.ticks.x = element_blank())
+    
+    print(fst.plot)
+  }
+                    
   return(fsts)
 }
