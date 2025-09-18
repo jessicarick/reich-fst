@@ -168,3 +168,63 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
   return(fst.list)
   beepr::beep()
 }
+
+# locus-specific fst calculation
+# CAUTION: WILL BE SLOW IF MANY LOCI
+# genlight object needs to have only two populations
+
+loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) { 
+  if (!require("matrixStats",character.only=T, quietly=T)) {
+    install.packages("matrixStats")
+    library(matrixStats, character.only=T)
+  }
+  if (!require("dplyr",character.only=T, quietly=T)) {
+    install.packages("dplyr")
+    library(dplyr, character.only=T)
+  }
+  
+  nloc <- gl@n.loc
+  npop <- length(levels(gl@pop))
+  if(npop != 2) {
+    stop("number of populations is not 2! this function will not work.")
+  }
+  
+  fsts <- tibble(loc=gl@loc.names,
+                 chr=gl@chromosome,
+                 pos=gl@position,
+                 fst=numeric(length(gl@loc.names)))
+  
+  p1 <- levels(gl@pop)[1]
+  p2 <- levels(gl@pop)[2]
+  
+  print(paste0("Calculating locus-specific FST values on ",length(gl@loc.names)," loci"))
+  print(paste0("between populations ",p1," and ",p2))
+  progress_bar = txtProgressBar(min=0, max=length(gl@loc.names), style = 1, char="*")
+  
+  for(i in 1:length(gl@loc.names)){
+        #print(paste("locus ",k," of ",length(gl@loc.names)))
+        pop1 <- gl.keep.pop(gl.keep.loc(gl,gl@loc.names[i],v=0), p1, mono.rm=FALSE, v=0)
+        pop2 <- gl.keep.pop(gl.keep.loc(gl,gl@loc.names[i],v=0), p2, mono.rm=FALSE, v=0)
+        
+        a1 <- colSums2(as.matrix(pop1),na.rm=T)
+        a2 <- colSums2(as.matrix(pop2),na.rm=T)
+        n1 <- apply(as.matrix(pop1),2,function(x) 2*sum(!is.na(x)))
+        n2 <- apply(as.matrix(pop2),2,function(x) 2*sum(!is.na(x)))
+        
+        h1 <- (a1*(n1-a1))/(n1*(n1-1))
+        h2 <- (a2*(n2-a2))/(n2*(n2-1))
+        
+        N <- (a1/n1 - a2/n2)^2 - h1/n1 - h2/n2
+        D <- N + h1 + h2
+        
+        F <- sum(N, na.rm=T)/sum(D, na.rm=T)
+        fsts[i,4] <- F
+        
+        setTxtProgressBar(progress_bar, value = i)
+  }      
+  
+  # make negative values 0
+  fsts$fst[fsts$fst < 0] <- 0
+  
+  return(fsts)
+}
