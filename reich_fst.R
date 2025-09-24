@@ -27,19 +27,16 @@ calc.reich.fst <- function(gl, loc=gl@loc.names) {
 
 reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
-    install.packages("matrixStats")
-    library(matrixStats, character.only=T)
+    exit("Function requires 'matrixStats' package; please install.")
   }
   if (!require("dplyr",character.only=T, quietly=T)) {
-    install.packages("dplyr")
-    library(dplyr, character.only=T)
+    exit("Function requires 'dplyr' package; please install.")
   }
-  if (!require("dartR",character.only=T, quietly=T)) {
-    install.packages("dartR")
-    library(dartR, character.only=T)
+  if (!require("dartR",character.only=T, quietly=T) & !require("dartRverse",character.only=T, quietly=T)) {
+    exit("Function requires 'dartR' or 'dartRverse' package; please install")
   }
   if (!require("combinat",character.only=T, quietly=T)) {
-    install.packages("combinat")
+    exit("Function requires 'combinat' packages; please install.")
   }
   
   nloc <- gl@n.loc
@@ -197,12 +194,13 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
 
 loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
-    install.packages("matrixStats")
-    library(matrixStats, character.only=T)
+    exit("Function requires 'matrixStats' package; please install.")
   }
   if (!require("dplyr",character.only=T, quietly=T)) {
-    install.packages("dplyr")
-    library(dplyr, character.only=T)
+    exit("Function requires 'dplyr' package; please install.")
+  }
+  if (!require("dartR",character.only=T, quietly=T) & !require("dartRverse",character.only=T, quietly=T)) {
+    exit("Function requires 'dartR' or 'dartRverse' package; please install")
   }
   
   nloc <- gl@n.loc
@@ -224,30 +222,16 @@ loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) {
   progress_bar = txtProgressBar(min=0, max=length(gl@loc.names), style = 1, char="*")
   
   for(i in 1:length(gl@loc.names)){
-        #print(paste("locus ",k," of ",length(gl@loc.names)))
-        pop1 <- gl.keep.pop(gl.keep.loc(gl,gl@loc.names[i],v=0), p1, mono.rm=FALSE, v=0)
-        pop2 <- gl.keep.pop(gl.keep.loc(gl,gl@loc.names[i],v=0), p2, mono.rm=FALSE, v=0)
-        
-        a1 <- colSums2(as.matrix(pop1),na.rm=T)
-        a2 <- colSums2(as.matrix(pop2),na.rm=T)
-        n1 <- apply(as.matrix(pop1),2,function(x) 2*sum(!is.na(x)))
-        n2 <- apply(as.matrix(pop2),2,function(x) 2*sum(!is.na(x)))
-        
-        h1 <- (a1*(n1-a1))/(n1*(n1-1))
-        h2 <- (a2*(n2-a2))/(n2*(n2-1))
-        
-        N <- (a1/n1 - a2/n2)^2 - h1/n1 - h2/n2
-        D <- N + h1 + h2
-        
-        F <- sum(N, na.rm=T)/sum(D, na.rm=T)
-        fsts[i,4] <- F
-        
-        setTxtProgressBar(progress_bar, value = i)
+    #print(paste("locus ",k," of ",length(gl@loc.names)))
+    F <- calc.reich.fst(gl,loc=gl@loc.names[i])
+    fsts[i,4] <- F
+    
+    setTxtProgressBar(progress_bar, value = i)
   }      
   
   # make negative values 0
   fsts$fst[fsts$fst < 0] <- 0
-
+  
   if (plot == TRUE){
     print("drawing plot of locus-specific FST estimates")
     
@@ -258,7 +242,7 @@ loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) {
     
     fst.plot <- ggplot(fsts, aes(x=loc,y=fst)) + 
       geom_point(size=1, alpha=0.6) +
-      geom_hline(yintercept=mean(test_loc$fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
+      geom_hline(yintercept=mean(fsts$fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
       theme_bw() +
       xlab("Locus") +
       ylab("Reich-Patterson FST Estimate") +
@@ -271,7 +255,7 @@ loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) {
     
     print(fst.plot)
   }
-                    
+  
   return(fsts)
 }
 
@@ -284,12 +268,13 @@ win.reich.fst <- function(gl, plot=FALSE,
                           verbose=TRUE, chrom=TRUE,
                           win.type=snp, win.size=100) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
-    install.packages("matrixStats")
-    library(matrixStats, character.only=T)
+    exit("Function requires 'matrixStats' package; please install.")
   }
   if (!require("dplyr",character.only=T, quietly=T)) {
-    install.packages("dplyr")
-    library(dplyr, character.only=T)
+    exit("Function requires 'dplyr' package; please install.")
+  }
+  if (!require("dartR",character.only=T, quietly=T) & !require("dartRverse",character.only=T, quietly=T)) {
+    exit("Function requires 'dartR' or 'dartRverse' package; please install")
   }
   
   nloc <- gl@n.loc
@@ -395,7 +380,6 @@ win.reich.fst <- function(gl, plot=FALSE,
     }
     
   } else if (win.type == "bp") {
-    #win.size=1000
     if (chrom == TRUE) {
       print(paste("working with",win.size,"bp windows and separating by chromosome"))
       
