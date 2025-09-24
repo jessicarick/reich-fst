@@ -192,7 +192,7 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
 # CAUTION: WILL BE SLOW IF MANY LOCI
 # genlight object needs to have only two populations
 
-loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) { 
+loc.reich.fst <- function(gl, plot=FALSE) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
     exit("Function requires 'matrixStats' package; please install.")
   }
@@ -264,9 +264,8 @@ loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) {
 # CAUTION: WILL BE SLOW IF MANY LOCI
 # genlight object needs to have only two populations
 
-win.reich.fst <- function(gl, plot=FALSE, 
-                          verbose=TRUE, chrom=TRUE,
-                          win.type=snp, win.size=100) { 
+win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
+                          win.type="snp", win.size=100) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
     exit("Function requires 'matrixStats' package; please install.")
   }
