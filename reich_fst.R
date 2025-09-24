@@ -1,4 +1,25 @@
-## reich fst estimator
+###########
+## just the core fst calculation
+calc.reich.fst <- function(gl, loc=gl@loc.names) {
+  pop1 <- gl.keep.loc(gl.keep.pop(gl, levels(gl@pop)[1], mono.rm=FALSE, v=0),loc, v=0)
+  pop2 <- gl.keep.loc(gl.keep.pop(gl, levels(gl@pop)[2], mono.rm=FALSE, v=0),loc, v=0)
+  
+  a1 <- colSums2(as.matrix(pop1),na.rm=T)
+  a2 <- colSums2(as.matrix(pop2),na.rm=T)
+  n1 <- apply(as.matrix(pop1),2,function(x) 2*sum(!is.na(x)))
+  n2 <- apply(as.matrix(pop2),2,function(x) 2*sum(!is.na(x)))
+  
+  h1 <- (a1*(n1-a1))/(n1*(n1-1))
+  h2 <- (a2*(n2-a2))/(n2*(n2-1))
+  
+  N <- (a1/n1 - a2/n2)^2 - h1/n1 - h2/n2
+  D <- N + h1 + h2
+  
+  F <- sum(N, na.rm=T)/sum(D, na.rm=T)
+}
+
+###########
+## reich fst estimator from gl object
 ## vectorized version
 ## input=genlight object
 ## FST will be calculated between pops in genlight object
@@ -169,6 +190,7 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
   beepr::beep()
 }
 
+###########
 # locus-specific fst calculation
 # CAUTION: WILL BE SLOW IF MANY LOCI
 # genlight object needs to have only two populations
@@ -251,4 +273,233 @@ loc.reich.fst <- function(gl, plot=FALSE, verbose=TRUE) {
   }
                     
   return(fsts)
+}
+
+###########
+# windowed fst calculation
+# CAUTION: WILL BE SLOW IF MANY LOCI
+# genlight object needs to have only two populations
+
+win.reich.fst <- function(gl, plot=FALSE, 
+                          verbose=TRUE, chrom=TRUE,
+                          win.type=snp, win.size=100) { 
+  if (!require("matrixStats",character.only=T, quietly=T)) {
+    install.packages("matrixStats")
+    library(matrixStats, character.only=T)
+  }
+  if (!require("dplyr",character.only=T, quietly=T)) {
+    install.packages("dplyr")
+    library(dplyr, character.only=T)
+  }
+  
+  nloc <- gl@n.loc
+  npop <- length(levels(gl@pop))
+  if(npop != 2) {
+    stop("number of populations is not 2! this function will not work.")
+  }
+  
+  print(paste0("Calculating windowed FST values on ",length(gl@loc.names)," loci"))
+  print(paste0("between populations ",levels(gl@pop)[1]," and ",levels(gl@pop)[2]))
+  
+  # creating windows
+  if (win.type == "snp") {
+    if (chrom == TRUE) {
+      print(paste("working with",win.size,"SNP windows and separating by chromosome"))
+      
+      windows <- tibble(win_num = integer(),
+                        chrom = character(),
+                        bin_start = integer(),
+                        bin_end = integer(),
+                        bin_mid = integer(),
+                        reich_fst = numeric(),
+                        n_snps = integer())
+      snps <- tibble(chrom = gl@chromosome,
+                     pos = gl@position,
+                     loc_name = gl@loc.names) %>%
+        group_by(chrom) %>%
+        mutate(win_num = ceiling(row_number()/win.size))
+      n_win <- snps %>%
+        group_by(chrom) %>%
+        summarize(n_snp = n(),
+                  n_win = max(win_num))
+      
+      if (min(n_win$n_win) < 5) {
+        print("WARNING: Some chromosomes have fewer than 5 windows; consider using a smaller window size.")
+      } else {
+        print("All chromosomes have at least 5 windows.")
+      }
+      
+      k <- 1
+      progress_bar = txtProgressBar(min=0, max=sum(n_win$n_win), style = 1, char="*")
+      
+      for (chr in unique(snps$chrom)){
+        snps_chr <- snps %>% filter(chrom == chr)
+        
+        for (win in unique(snps_chr$win_num)){
+          fst_win <- calc.reich.fst(gl, loc=snps_chr %>% filter(win_num == win) %>% pull(loc_name))
+          
+          windows <- windows %>%
+            add_row(win_num = k,
+                    chrom = chr,
+                    bin_start = min(snps_chr %>% filter(win_num == win) %>% pull(pos)),
+                    bin_end = max(snps_chr %>% filter(win_num == win) %>% pull(pos)),
+                    bin_mid = floor(bin_start + (bin_end-bin_start)/2),
+                    reich_fst = fst_win,
+                    n_snps = nrow(snps_chr %>% filter(win_num == win)))
+          
+          k <- k+1
+          setTxtProgressBar(progress_bar, value = k)
+        }
+        
+      }
+      
+    } else {
+      print(paste("working with",win.size,"SNP windows and NOT separating by chromosome"))
+      
+      windows <- tibble(win_num = integer(),
+                        #chrom = character(),
+                        bin_start = integer(),
+                        bin_end = integer(),
+                        bin_mid = integer(),
+                        reich_fst = numeric(),
+                        n_snps = integer())
+      snps <- tibble(chrom = gl@chromosome,
+                     pos = gl@position,
+                     loc_name = gl@loc.names) %>%
+        #group_by(chrom) %>%
+        mutate(win_num = ceiling(row_number()/win.size))
+      n_win <- snps %>%
+        #group_by(chrom) %>%
+        summarize(n_snp = n(),
+                  n_win = max(win_num))
+      
+      k <- 1
+      progress_bar = txtProgressBar(min=0, max=max(n_win$n_win), style = 1, char="*")
+      
+       for (win in unique(snps$win_num)){
+          fst_win <- calc.reich.fst(gl, loc=snps %>% filter(win_num == win) %>% pull(loc_name))
+          
+          windows <- windows %>%
+            add_row(win_num = k,
+                    #chrom = chr,
+                    bin_start = min(snps %>% filter(win_num == win) %>% pull(pos)),
+                    bin_end = max(snps %>% filter(win_num == win) %>% pull(pos)),
+                    bin_mid = floor(bin_start + (bin_end-bin_start)/2),
+                    reich_fst = fst_win,
+                    n_snps = nrow(snps %>% filter(win_num == win)))
+          k <- k+1
+          setTxtProgressBar(progress_bar, value = k)
+          
+       }
+      
+    }
+    
+  } else if (win.type == "bp") {
+    #win.size=1000
+    if (chrom == TRUE) {
+      print(paste("working with",win.size,"bp windows and separating by chromosome"))
+      
+      windows <- tibble(win_num = integer(),
+                        chrom = character(),
+                        bin_start = integer(),
+                        bin_end = integer(),
+                        bin_mid = integer(),
+                        reich_fst = numeric(),
+                        n_snps = integer())
+      snps <- tibble(chrom = gl@chromosome,
+                     pos = gl@position,
+                     loc_name = gl@loc.names) %>%
+        group_by(chrom) %>%
+        mutate(win_num = ceiling(pos/win.size))
+      n_win <- snps %>%
+        group_by(chrom, win_num) %>%
+        summarize(n_snp = n())
+      mean_nsnp <- n_win %>% filter(n_snp > 0) %>% pull(n_snp) %>% mean(na.rm=T)
+      #n_NA <- max(n_win$win_num) - length(unique(n_win$win_num))
+      print(paste("Mean snps per window is",round(mean_nsnp,2)))
+      
+      k <- 1
+      progress_bar = txtProgressBar(min=0, max=nrow(n_win), style = 1, char="*")
+      
+      for (chr in unique(snps$chrom)){
+        snps_chr <- snps %>% filter(chrom == chr)
+        
+        for (win in unique(snps_chr$win_num)){
+          fst_win <- calc.reich.fst(gl, loc=snps_chr %>% filter(win_num == win) %>% pull(loc_name))
+          
+          windows <- windows %>%
+            add_row(win_num = k,
+                    chrom = chr,
+                    bin_start = min(snps_chr %>% filter(win_num == win) %>% pull(pos)),
+                    bin_end = max(snps_chr %>% filter(win_num == win) %>% pull(pos)),
+                    bin_mid = floor(bin_start + (bin_end-bin_start)/2),
+                    reich_fst = fst_win,
+                    n_snps = nrow(snps_chr %>% filter(win_num == win)))
+          k <- k+1
+          setTxtProgressBar(progress_bar, value = k)
+          
+        }
+        
+      }
+      
+      
+    } else {
+      stop("it doesn't make sense to work with bp positions and not separate by chromosome! try again.")
+      
+    }
+    
+  } else {
+    stop("unrecognized win.type argument, should be either snp or bp")
+  }
+  
+  # make negative values 0
+  windows$reich_fst[windows$reich_fst < 0] <- 0
+  
+  if (plot == TRUE & chrom == TRUE){
+    print("drawing plot of windowed FST estimates")
+    
+    if (!require("ggplot2",character.only=T, quietly=T)) {
+      install.packages("ggplot2")
+      library(ggplot2, character.only=T)
+    }
+    
+    fst.plot <- ggplot(windows, aes(x=win_num,y=reich_fst)) + 
+      geom_point(aes(color=chrom), size=0.5, alpha=0.6) +
+      geom_hline(yintercept=mean(windows$reich_fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
+      theme_bw() +
+      xlab("Locus") +
+      ylab("Reich-Patterson FST Estimate") +
+      theme(legend.position="none",
+            axis.text.x=element_blank(),
+            plot.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            axis.ticks.x = element_blank())
+    
+    print(fst.plot)
+  } else if (plot == TRUE & chrom == FALSE) {
+    print("drawing plot of windowed FST estimates")
+    
+    if (!require("ggplot2",character.only=T, quietly=T)) {
+      install.packages("ggplot2")
+      library(ggplot2, character.only=T)
+    }
+    
+    fst.plot <- ggplot(windows, aes(x=win_num,y=reich_fst)) + 
+      geom_point(size=0.5, alpha=0.6) +
+      geom_hline(yintercept=mean(windows$reich_fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
+      theme_bw() +
+      xlab("Locus") +
+      ylab("Reich-Patterson FST Estimate") +
+      theme(legend.position="none",
+            axis.text.x=element_blank(),
+            plot.background = element_blank(),
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            axis.ticks.x = element_blank())
+    
+    print(fst.plot)
+  }
+  
+  return(windows)
 }
