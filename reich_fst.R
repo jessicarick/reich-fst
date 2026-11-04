@@ -1,13 +1,13 @@
 ###########
 ## just the core fst calculation
 calc.reich.fst <- function(gl, loc=gl@loc.names) {
-  pop1 <- gl.keep.loc(gl.keep.pop(gl, levels(gl@pop)[1], mono.rm=FALSE, v=0),loc, v=0)
-  pop2 <- gl.keep.loc(gl.keep.pop(gl, levels(gl@pop)[2], mono.rm=FALSE, v=0),loc, v=0)
+  pop1 <- gl.keep.loc(gl.keep.pop(gl, levels(gl@pop)[1], mono.rm=FALSE, v=0), loc, v=0)
+  pop2 <- gl.keep.loc(gl.keep.pop(gl, levels(gl@pop)[2], mono.rm=FALSE, v=0), loc, v=0)
   
-  a1 <- colSums2(as.matrix(pop1),na.rm=T)
-  a2 <- colSums2(as.matrix(pop2),na.rm=T)
-  n1 <- apply(as.matrix(pop1),2,function(x) 2*sum(!is.na(x)))
-  n2 <- apply(as.matrix(pop2),2,function(x) 2*sum(!is.na(x)))
+  a1 <- glSum(pop1)
+  a2 <- glSum(pop2)
+  n1 <- -(adegenet::glNA(pop1)) + 2*nInd(pop1)
+  n2 <- -(adegenet::glNA(pop2)) + 2*nInd(pop2)
   
   h1 <- (a1*(n1-a1))/(n1*(n1-1))
   h2 <- (a2*(n2-a2))/(n2*(n2-1))
@@ -62,10 +62,10 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
         pop1 <- gl.keep.pop(gl, p1, mono.rm=FALSE, v=0)
         pop2 <- gl.keep.pop(gl, p2, mono.rm=FALSE, v=0)
         
-        a1 <- colSums2(as.matrix(pop1),na.rm=T)
-        a2 <- colSums2(as.matrix(pop2),na.rm=T)
-        n1 <- apply(as.matrix(pop1),2,function(x) 2*sum(!is.na(x)))
-        n2 <- apply(as.matrix(pop2),2,function(x) 2*sum(!is.na(x)))
+        a1 <- glSum(pop1)
+        a2 <- glSum(pop2)
+        n1 <- -(adegenet::glNA(pop1)) + 2*nInd(pop1)
+        n2 <- -(adegenet::glNA(pop2)) + 2*nInd(pop2)
         
         h1 <- (a1*(n1-a1))/(n1*(n1-1))
         h2 <- (a2*(n2-a2))/(n2*(n2-1))
@@ -192,7 +192,9 @@ reich.fst <- function(gl, bootstrap=FALSE, plot=FALSE, verbose=TRUE) {
 # CAUTION: WILL BE SLOW IF MANY LOCI
 # genlight object needs to have only two populations
 
-loc.reich.fst <- function(gl, plot=FALSE) { 
+loc.reich.fst <- function(gl, pop1, pop2, 
+                          loc_subset=FALSE, 
+                          plot=FALSE) { 
   if (!require("matrixStats",character.only=T, quietly=T)) {
     exit("Function requires 'matrixStats' package; please install.")
   }
@@ -203,37 +205,69 @@ loc.reich.fst <- function(gl, plot=FALSE) {
     exit("Function requires 'dartR' or 'dartRverse' package; please install")
   }
   
-  nloc <- gl@n.loc
-  npop <- length(levels(gl@pop))
-  if(npop != 2) {
-    stop("number of populations is not 2! this function will not work.")
+  if(loc_subset != FALSE) {
+    print("subsetting to loci specified, n=", length(loc_subset))
+    gl <- gl.keep.loc(gl, loc.list=loc_subset)
+  } else {
+    print("no subset of loci specified, running on all loci.")
   }
+  
+  nloc <- gl@n.loc
+  
+  if(pop1 %in% levels(gl@pop) & pop2 %in% levels(gl@pop)) {
+    print("both populations found in genlight object; proceeding with fst calculation.")
+  } else {
+    stop("one or both populations not found in genlight object! stopping now.")
+  }
+  # npop <- length(levels(gl@pop))
+  # if(npop != 2) {
+  #   stop("number of populations is not 2! this function will not work.")
+  # }
   
   fsts <- tibble(loc=gl@loc.names,
                  chr=gl@chromosome,
                  pos=gl@position,
                  fst=numeric(length(gl@loc.names)))
   
-  p1 <- levels(gl@pop)[1]
-  p2 <- levels(gl@pop)[2]
+  p1 <- pop1
+  p2 <- pop2
   
-  print(paste0("Calculating locus-specific FST values on ",length(gl@loc.names)," loci"))
-  print(paste0("between populations ",p1," and ",p2))
+  message(paste0("Calculating locus-specific FST values on ",length(gl@loc.names)," loci"))
+  message(paste0("between populations ",p1," and ",p2))
   progress_bar = txtProgressBar(min=0, max=length(gl@loc.names), style = 1, char="*")
   
-  for(i in 1:length(gl@loc.names)){
-    #print(paste("locus ",k," of ",length(gl@loc.names)))
-    F <- calc.reich.fst(gl,loc=gl@loc.names[i])
-    fsts[i,4] <- F
-    
-    setTxtProgressBar(progress_bar, value = i)
-  }      
+  # for(i in 1:length(gl@loc.names)){
+  #   #print(paste("locus ",k," of ",length(gl@loc.names)))
+  #   F <- calc.reich.fst(gl,loc=gl@loc.names[i])
+  #   fsts[i,4] <- F
+  #   
+  #   setTxtProgressBar(progress_bar, value = i)
+  # }      
+  
+  pop1_gl <- gl.keep.pop(gl, p1, mono.rm=FALSE, v=0)
+  pop2_gl <- gl.keep.pop(gl, p2, mono.rm=FALSE, v=0)
+  
+  a1 <- glSum(pop1_gl)
+  a2 <- glSum(pop2_gl)
+  n1 <- -(adegenet::glNA(pop1_gl)) + 2*nInd(pop1_gl)
+  n2 <- -(adegenet::glNA(pop2_gl)) + 2*nInd(pop2_gl)
+  
+  h1 <- (a1*(n1-a1))/(n1*(n1-1))
+  h2 <- (a2*(n2-a2))/(n2*(n2-1))
+  
+  N <- (a1/n1 - a2/n2)^2 - h1/n1 - h2/n2
+  D <- N + h1 + h2
+  
+  F <- N / D
   
   # make negative values 0
-  fsts$fst[fsts$fst < 0] <- 0
+  F[F < 0] <- 0
+  
+  # add to tibble
+  fsts$fst <- F
   
   if (plot == TRUE){
-    print("drawing plot of locus-specific FST estimates")
+    message("drawing plot of locus-specific FST estimates")
     
     if (!require("ggplot2",character.only=T, quietly=T)) {
       install.packages("ggplot2")
@@ -282,13 +316,13 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
     stop("number of populations is not 2! this function will not work.")
   }
   
-  print(paste0("Calculating windowed FST values on ",length(gl@loc.names)," loci"))
-  print(paste0("between populations ",levels(gl@pop)[1]," and ",levels(gl@pop)[2]))
+  message(paste0("Calculating windowed FST values on ",length(gl@loc.names)," loci"))
+  message(paste0("between populations ",levels(gl@pop)[1]," and ",levels(gl@pop)[2]))
   
   # creating windows
   if (win.type == "snp") {
     if (chrom == TRUE) {
-      print(paste("working with",win.size,"SNP windows and separating by chromosome"))
+      message(paste("working with",win.size,"SNP windows and separating by chromosome"))
       
       windows <- tibble(win_num = integer(),
                         chrom = character(),
@@ -308,9 +342,9 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
                   n_win = max(win_num))
       
       if (min(n_win$n_win) < 5) {
-        print("WARNING: Some chromosomes have fewer than 5 windows; consider using a smaller window size.")
+        message("WARNING: Some chromosomes have fewer than 5 windows; consider using a smaller window size.")
       } else {
-        print("All chromosomes have at least 5 windows.")
+        message("All chromosomes have at least 5 windows.")
       }
       
       k <- 1
@@ -338,7 +372,7 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
       }
       
     } else {
-      print(paste("working with",win.size,"SNP windows and NOT separating by chromosome"))
+      message(paste("working with",win.size,"SNP windows and NOT separating by chromosome"))
       
       windows <- tibble(win_num = integer(),
                         #chrom = character(),
@@ -380,7 +414,7 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
     
   } else if (win.type == "bp") {
     if (chrom == TRUE) {
-      print(paste("working with",win.size,"bp windows and separating by chromosome"))
+      message(paste("working with",win.size,"bp windows and separating by chromosome"))
       
       windows <- tibble(win_num = integer(),
                         chrom = character(),
@@ -399,7 +433,7 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
         summarize(n_snp = n())
       mean_nsnp <- n_win %>% filter(n_snp > 0) %>% pull(n_snp) %>% mean(na.rm=T)
       #n_NA <- max(n_win$win_num) - length(unique(n_win$win_num))
-      print(paste("Mean snps per window is",round(mean_nsnp,2)))
+      message(paste("Mean snps per window is",round(mean_nsnp,2)))
       
       k <- 1
       progress_bar = txtProgressBar(min=0, max=nrow(n_win), style = 1, char="*")
@@ -439,7 +473,7 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
   windows$reich_fst[windows$reich_fst < 0] <- 0
   
   if (plot == TRUE & chrom == TRUE){
-    print("drawing plot of windowed FST estimates")
+    message("drawing plot of windowed FST estimates")
     
     if (!require("ggplot2",character.only=T, quietly=T)) {
       install.packages("ggplot2")
@@ -461,7 +495,7 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
     
     print(fst.plot)
   } else if (plot == TRUE & chrom == FALSE) {
-    print("drawing plot of windowed FST estimates")
+    message("drawing plot of windowed FST estimates")
     
     if (!require("ggplot2",character.only=T, quietly=T)) {
       install.packages("ggplot2")
