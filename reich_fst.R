@@ -324,6 +324,22 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
     if (chrom == TRUE) {
       message(paste("working with",win.size,"SNP windows and separating by chromosome"))
       
+      ## first calculate fst for each snp
+      pop1_gl <- gl.keep.pop(gl, pop1, mono.rm=FALSE, v=0)
+      pop2_gl <- gl.keep.pop(gl, pop2, mono.rm=FALSE, v=0)
+      
+      a1 <- glSum(pop1_gl)
+      a2 <- glSum(pop2_gl)
+      n1 <- -(adegenet::glNA(pop1_gl)) + 2*nInd(pop1_gl)
+      n2 <- -(adegenet::glNA(pop2_gl)) + 2*nInd(pop2_gl)
+      
+      h1 <- (a1*(n1-a1))/(n1*(n1-1))
+      h2 <- (a2*(n2-a2))/(n2*(n2-1))
+      
+      N <- (a1/n1 - a2/n2)^2 - h1/n1 - h2/n2
+      D <- N + h1 + h2
+      
+      ## now aggregate in windows
       windows <- tibble(win_num = integer(),
                         chrom = character(),
                         bin_start = integer(),
@@ -333,131 +349,145 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
                         n_snps = integer())
       snps <- tibble(chrom = gl@chromosome,
                      pos = gl@position,
-                     loc_name = gl@loc.names) %>%
+                     loc_name = gl@loc.names,
+                     N = N,
+                     D = D) %>%
         group_by(chrom) %>%
         mutate(win_num = ceiling(row_number()/win.size))
-      n_win <- snps %>%
+      win_fsts <- snps %>%
+        group_by(chrom, win_num) %>%
+        summarize(bin_start = min(pos),
+                  bin_end = max(pos),
+                  n_snp = n(),
+                  N_sum = sum(N, na.rm=T),
+                  D_sum = sum(D, na.rm=T)) %>%
+        mutate(bin_mid = round((bin_start + bin_end)/2,0),
+               reich_fst = N_sum / D_sum) %>%
+        select(chrom, win_num, bin_start, bin_end, bin_mid, reich_fst, n_snp) %>%
         group_by(chrom) %>%
-        summarize(n_snp = n(),
-                  n_win = max(win_num))
+        arrange(bin_start, .by_group = TRUE) %>%
+        ungroup() %>%
+        mutate(win_seq = seq(1,n()))
       
-      if (min(n_win$n_win) < 5) {
-        message("WARNING: Some chromosomes have fewer than 5 windows; consider using a smaller window size.")
-      } else {
-        message("All chromosomes have at least 5 windows.")
-      }
+      ## set negative numbers to 0
+      win_fsts$reich_fst[win_fsts$reich_fst < 0] <- 0
       
-      k <- 1
-      progress_bar = txtProgressBar(min=0, max=sum(n_win$n_win), style = 1, char="*")
+      # if (min(n_win$n_win) < 5) {
+      #   message("WARNING: Some chromosomes have fewer than 5 windows; consider using a smaller window size.")
+      # } else {
+      #   message("All chromosomes have at least 5 windows.")
+      # }
       
-      for (chr in unique(snps$chrom)){
-        snps_chr <- snps %>% filter(chrom == chr)
-        
-        for (win in unique(snps_chr$win_num)){
-          fst_win <- calc.reich.fst(gl, loc=snps_chr %>% filter(win_num == win) %>% pull(loc_name))
-          
-          windows <- windows %>%
-            add_row(win_num = k,
-                    chrom = chr,
-                    bin_start = min(snps_chr %>% filter(win_num == win) %>% pull(pos)),
-                    bin_end = max(snps_chr %>% filter(win_num == win) %>% pull(pos)),
-                    bin_mid = floor(bin_start + (bin_end-bin_start)/2),
-                    reich_fst = fst_win,
-                    n_snps = nrow(snps_chr %>% filter(win_num == win)))
-          
-          k <- k+1
-          setTxtProgressBar(progress_bar, value = k)
-        }
-        
-      }
+      # k <- 1
+      # progress_bar = txtProgressBar(min=0, max=sum(n_win$n_win), style = 1, char="*")
+      # 
+      # for (chr in unique(snps$chrom)){
+      #   snps_chr <- snps %>% filter(chrom == chr)
+      #   
+      #   for (win in unique(snps_chr$win_num)){
+      #     fst_win <- calc.reich.fst(gl, loc=snps_chr %>% filter(win_num == win) %>% pull(loc_name))
+      #     
+      #     windows <- windows %>%
+      #       add_row(win_num = k,
+      #               chrom = chr,
+      #               bin_start = min(snps_chr %>% filter(win_num == win) %>% pull(pos)),
+      #               bin_end = max(snps_chr %>% filter(win_num == win) %>% pull(pos)),
+      #               bin_mid = floor(bin_start + (bin_end-bin_start)/2),
+      #               reich_fst = fst_win,
+      #               n_snps = nrow(snps_chr %>% filter(win_num == win)))
+      #     
+      #     k <- k+1
+      #     setTxtProgressBar(progress_bar, value = k)
+      #   }
+      #   
+      # }
       
     } else {
       message(paste("working with",win.size,"SNP windows and NOT separating by chromosome"))
       
-      windows <- tibble(win_num = integer(),
-                        #chrom = character(),
-                        bin_start = integer(),
-                        bin_end = integer(),
-                        bin_mid = integer(),
-                        reich_fst = numeric(),
-                        n_snps = integer())
+      ## first calculate fst for each snp
+      pop1_gl <- gl.keep.pop(gl, pop1, mono.rm=FALSE, v=0)
+      pop2_gl <- gl.keep.pop(gl, pop2, mono.rm=FALSE, v=0)
+      
+      a1 <- glSum(pop1_gl)
+      a2 <- glSum(pop2_gl)
+      n1 <- -(adegenet::glNA(pop1_gl)) + 2*nInd(pop1_gl)
+      n2 <- -(adegenet::glNA(pop2_gl)) + 2*nInd(pop2_gl)
+      
+      h1 <- (a1*(n1-a1))/(n1*(n1-1))
+      h2 <- (a2*(n2-a2))/(n2*(n2-1))
+      
+      N <- (a1/n1 - a2/n2)^2 - h1/n1 - h2/n2
+      D <- N + h1 + h2
+      
+      ## now aggregate in windows
       snps <- tibble(chrom = gl@chromosome,
                      pos = gl@position,
-                     loc_name = gl@loc.names) %>%
+                     loc_name = gl@loc.names,
+                     N = N,
+                     D = D) %>%
         #group_by(chrom) %>%
         mutate(win_num = ceiling(row_number()/win.size))
-      n_win <- snps %>%
-        #group_by(chrom) %>%
-        summarize(n_snp = n(),
-                  n_win = max(win_num))
+      win_fsts <- snps %>%
+        group_by(win_num) %>%
+        summarize(bin_start = min(pos),
+                  bin_end = max(pos),
+                  n_snp = n(),
+                  N_sum = sum(N, na.rm=T),
+                  D_sum = sum(D, na.rm=T)) %>%
+        mutate(bin_mid = round((bin_start + bin_end)/2,0),
+               reich_fst = N_sum / D_sum) %>%
+        select(win_num, bin_start, bin_end, bin_mid, reich_fst, n_snp)
       
-      k <- 1
-      progress_bar = txtProgressBar(min=0, max=max(n_win$n_win), style = 1, char="*")
-      
-       for (win in unique(snps$win_num)){
-          fst_win <- calc.reich.fst(gl, loc=snps %>% filter(win_num == win) %>% pull(loc_name))
-          
-          windows <- windows %>%
-            add_row(win_num = k,
-                    #chrom = chr,
-                    bin_start = min(snps %>% filter(win_num == win) %>% pull(pos)),
-                    bin_end = max(snps %>% filter(win_num == win) %>% pull(pos)),
-                    bin_mid = floor(bin_start + (bin_end-bin_start)/2),
-                    reich_fst = fst_win,
-                    n_snps = nrow(snps %>% filter(win_num == win)))
-          k <- k+1
-          setTxtProgressBar(progress_bar, value = k)
-          
-       }
+      ## set negative numbers to 0
+      win_fsts$reich_fst[win_fsts$reich_fst < 0] <- 0
       
     }
     
   } else if (win.type == "bp") {
     if (chrom == TRUE) {
       message(paste("working with",win.size,"bp windows and separating by chromosome"))
+    
+      ## first calculate fst for each snp
+      pop1_gl <- gl.keep.pop(gl, pop1, mono.rm=FALSE, v=0)
+      pop2_gl <- gl.keep.pop(gl, pop2, mono.rm=FALSE, v=0)
       
-      windows <- tibble(win_num = integer(),
-                        chrom = character(),
-                        bin_start = integer(),
-                        bin_end = integer(),
-                        bin_mid = integer(),
-                        reich_fst = numeric(),
-                        n_snps = integer())
+      a1 <- glSum(pop1_gl)
+      a2 <- glSum(pop2_gl)
+      n1 <- -(adegenet::glNA(pop1_gl)) + 2*nInd(pop1_gl)
+      n2 <- -(adegenet::glNA(pop2_gl)) + 2*nInd(pop2_gl)
+      
+      h1 <- (a1*(n1-a1))/(n1*(n1-1))
+      h2 <- (a2*(n2-a2))/(n2*(n2-1))
+      
+      N <- (a1/n1 - a2/n2)^2 - h1/n1 - h2/n2
+      D <- N + h1 + h2
+      
+      ## now aggregate in windows
       snps <- tibble(chrom = gl@chromosome,
                      pos = gl@position,
-                     loc_name = gl@loc.names) %>%
+                     loc_name = gl@loc.names,
+                     N = N,
+                     D = D) %>%
         group_by(chrom) %>%
         mutate(win_num = ceiling(pos/win.size))
-      n_win <- snps %>%
+      win_fsts <- snps %>%
         group_by(chrom, win_num) %>%
-        summarize(n_snp = n())
-      mean_nsnp <- n_win %>% filter(n_snp > 0) %>% pull(n_snp) %>% mean(na.rm=T)
-      #n_NA <- max(n_win$win_num) - length(unique(n_win$win_num))
-      message(paste("Mean snps per window is",round(mean_nsnp,2)))
+        summarize(bin_start = min(pos),
+                  bin_end = max(pos),
+                  n_snp = n(),
+                  N_sum = sum(N, na.rm=T),
+                  D_sum = sum(D, na.rm=T)) %>%
+        mutate(bin_mid = round((bin_start + bin_end)/2,0),
+               reich_fst = N_sum / D_sum) %>%
+        select(chrom, win_num, bin_start, bin_end, bin_mid, reich_fst, n_snp) %>%
+        group_by(chrom) %>%
+        arrange(bin_start, .by_group = TRUE) %>%
+        ungroup() %>%
+        mutate(win_seq = seq(1,n()))
       
-      k <- 1
-      progress_bar = txtProgressBar(min=0, max=nrow(n_win), style = 1, char="*")
-      
-      for (chr in unique(snps$chrom)){
-        snps_chr <- snps %>% filter(chrom == chr)
-        
-        for (win in unique(snps_chr$win_num)){
-          fst_win <- calc.reich.fst(gl, loc=snps_chr %>% filter(win_num == win) %>% pull(loc_name))
-          
-          windows <- windows %>%
-            add_row(win_num = k,
-                    chrom = chr,
-                    bin_start = min(snps_chr %>% filter(win_num == win) %>% pull(pos)),
-                    bin_end = max(snps_chr %>% filter(win_num == win) %>% pull(pos)),
-                    bin_mid = floor(bin_start + (bin_end-bin_start)/2),
-                    reich_fst = fst_win,
-                    n_snps = nrow(snps_chr %>% filter(win_num == win)))
-          k <- k+1
-          setTxtProgressBar(progress_bar, value = k)
-          
-        }
-        
-      }
+      ## set negative numbers to 0
+      win_fsts$reich_fst[win_fsts$reich_fst < 0] <- 0
       
       
     } else {
@@ -480,12 +510,13 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
       library(ggplot2, character.only=T)
     }
     
-    fst.plot <- ggplot(windows, aes(x=win_num,y=reich_fst)) + 
+    fst.plot <- ggplot(win_fsts, aes(x=win_seq,y=reich_fst)) + 
       geom_point(aes(color=chrom), size=0.5, alpha=0.6) +
-      geom_hline(yintercept=mean(windows$reich_fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
+      geom_hline(yintercept=mean(win_fsts$reich_fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
       theme_bw() +
+      scale_color_manual(values=rep(c("gray60","gray20"),nrow(win_fsts))) +
       xlab("Locus") +
-      ylab("Reich-Patterson FST Estimate") +
+      ylab("Windowed Reich-Patterson FST") +
       theme(legend.position="none",
             axis.text.x=element_blank(),
             plot.background = element_blank(),
@@ -502,12 +533,13 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
       library(ggplot2, character.only=T)
     }
     
-    fst.plot <- ggplot(windows, aes(x=win_num,y=reich_fst)) + 
-      geom_point(size=0.5, alpha=0.6) +
-      geom_hline(yintercept=mean(windows$reich_fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
+    fst.plot <- ggplot(win_fsts, aes(x=win_seq,y=reich_fst)) + 
+      geom_point(aes(color=chrom), size=0.5, alpha=0.6) +
+      geom_hline(yintercept=mean(win_fsts$reich_fst,na.rm=T), lty=3, lwd=0.5, col="gray50") +
       theme_bw() +
+      scale_color_manual(values=rep(c("gray60","gray20"),nrow(win_fsts))) +
       xlab("Locus") +
-      ylab("Reich-Patterson FST Estimate") +
+      ylab("Windowed Reich-Patterson FST") +
       theme(legend.position="none",
             axis.text.x=element_blank(),
             plot.background = element_blank(),
@@ -518,5 +550,5 @@ win.reich.fst <- function(gl, plot=FALSE, chrom=TRUE,
     print(fst.plot)
   }
   
-  return(windows)
+  return(win_fsts)
 }
